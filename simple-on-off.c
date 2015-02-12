@@ -84,7 +84,10 @@ ioctl(mcp1, I2C_SLAVE, 0x21);
   */
   uint8_t buffer[2];
 
-  //Chip 0
+  // First, we must set the I/O direction to output.
+  // Write 0x00 to all IODIRA and IODIRB registers.
+
+  // Chip 0
   buffer[0] = 0x00;
   buffer[1] = 0x01;
   write(mcp0, buffer, 2) ;  // set IODIRA to 0x00, all outputs
@@ -93,7 +96,7 @@ ioctl(mcp1, I2C_SLAVE, 0x21);
   buffer[1] = 0x01;
   write(mcp0, buffer, 2) ;  // set IODIRB to 0x00, all outputs
 
-  //Chip 1
+  // Chip 1
   buffer[0] = 0x00;
   buffer[1] = 0x01;
   write(mcp0, buffer, 2) ;  // set IODIRA to 0x00, all outputs
@@ -102,10 +105,13 @@ ioctl(mcp1, I2C_SLAVE, 0x21);
   buffer[1] = 0x01;
   write(mcp1, buffer, 2) ;  // set IODIRB to 0x00, all outputs
 
-  //Now we set the outputs' state to low by writing 0x00 to GPIOA and GPIOB.
-  //This function will be called for turning off the valves.
+  // Now we should initially set the outputs' state to low
+  // by writing 0x00 byte to GPIOA and GPIOB.
+  // Do the same whenever you want to turn all outputs off at once.
+  // It should be easier to do this with a "for" loop (DRY principle),
+  // and define a function that can be called from your program.
 
-  //Chip 0
+  // Chip 0
   buffer[0] = 0x12;
   buffer[1] = 0x00;
   write(mcp0, buffer, 2) ; //GPIOA to 0x00, all off
@@ -114,7 +120,7 @@ ioctl(mcp1, I2C_SLAVE, 0x21);
   buffer[1] = 0x00;
   write(mcp0, buffer, 2) ; //GPIOB to 0x00, all off
 
-  //Chip 1
+  // Chip 1
   buffer[0] = 0x12;
   buffer[1] = 0x00;
   write(mcp1, buffer, 2) ; //GPIOA to 0x00, all off
@@ -124,7 +130,8 @@ ioctl(mcp1, I2C_SLAVE, 0x21);
   write(mcp1, buffer, 2) ; //GPIOB to 0x00, all off
 
 
-  //We're slowly getting to turn the outputs on...
+  // We're slowly getting to turn the outputs on...
+  // Let's set up some arbitrary bytes to send.
 
   int byte1 ;
   int byte2 ;
@@ -136,8 +143,8 @@ ioctl(mcp1, I2C_SLAVE, 0x21);
   byte3 = 0x15 ;
   byte4 = 0xec ;
 
-  //Now, let's write some bytes to the outputs!
-  //Chip 0
+  // Now, let's write these bytes to the outputs!
+  // Chip 0
   buffer[0] = 0x12;
   buffer[1] = byte1;
   write(mcp0, buffer, 2) ; //GPIOA set byte 1
@@ -146,7 +153,7 @@ ioctl(mcp1, I2C_SLAVE, 0x21);
   buffer[1] = byte2;
   write(mcp0, buffer, 2) ; //GPIOB set byte 2
 
-  //Chip 1
+  // Chip 1
   buffer[0] = 0x12;
   buffer[1] = byte3;
   write(mcp1, buffer, 2) ; //GPIOA set byte 3
@@ -156,13 +163,13 @@ ioctl(mcp1, I2C_SLAVE, 0x21);
   write(mcp1, buffer, 2) ; //GPIOB set byte 4
 
 
-  //Wait 5s so that you see the outputs on/off
+  // Wait 5s so that you see the outputs turned on:
   sleep(5) ;
 
+  // Now turn all the outputs off - write 0x00 to GPIOA, GPIOB
+  // on both chips:
 
-  //Now turn all the outputs off:
-
-  //Chip 0
+  // Chip 0
   buffer[0] = 0x12;
   buffer[1] = 0x00;
   write(mcp0, buffer, 2) ; //GPIOA to 0x00, all off
@@ -171,7 +178,7 @@ ioctl(mcp1, I2C_SLAVE, 0x21);
   buffer[1] = 0x00;
   write(mcp0, buffer, 2) ; //GPIOB to 0x00, all off
 
-  //Chip 1
+  // Chip 1
   buffer[0] = 0x12;
   buffer[1] = 0x00;
   write(mcp1, buffer, 2) ; //GPIOA to 0x00, all off
@@ -179,6 +186,8 @@ ioctl(mcp1, I2C_SLAVE, 0x21);
   buffer[0] = 0x13;
   buffer[1] = 0x00;
   write(mcp1, buffer, 2) ; //GPIOB to 0x00, all off
+
+  // This will be the end of our demonstration program.
 
   return 0 ;
 }
