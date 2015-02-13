@@ -72,7 +72,8 @@ gcc input_file.c -o output_file -lwiringPi
 static const char *device = "/dev/i2c-1";	// Filesystem path to access the I2C bus
 uint8_t buffer[2];                              // Initialize a buffer for two bytes to write to the device
 int mcp0, mcp1;                                 // Both MCP23017 chip file descriptors
-static volatile int last_state;                      // For storing the input's state
+static volatile int last_state;                 // For storing the input's state
+last_state = 0;
 struct timeval last_change;                     // For storing the last state change
 
 
@@ -203,14 +204,14 @@ void send_bytes(int byte1, int byte2, int byte3, int byte4) {
   write(mcp1, buffer, 2) ; //GPIOB set byte 4
 }
 
-/*
+
 void interrupt_handler(void) {
 /* Here all the magic happens...
    Upon interrupt, this function checks if the last input state was on or off.
    If it was off (and is on now), then send the bytes to outputs.
    If it was on (and is off now), then turn all lines off.
 
-/*
+*/
 
   struct timeval now;
   unsigned long diff;
@@ -220,18 +221,9 @@ void interrupt_handler(void) {
   // Time difference - set 10ms (1/100s)
   diff = (now.tv_sec * 1000000 + 20000) - (last_change.tv_sec * 1000000 + last_change.tv_usec);
 
-  // Filter any changes in intervals shorter than diff (like contact bouncing etc.):
+  // Filter any changes in intervals shorter than diff (like contact bouncing etc.).
+  // Change the status:
   if (diff > 10000) {
-
-  // Check whether the last state was on or off:
-    if (last_state) {
-      all_off();
-    }
-    else {
-      break;
-    }
-
-    // Change the "state" variable value:
     last_state = !last_state;
   }
 
@@ -239,7 +231,6 @@ void interrupt_handler(void) {
   last_change = now;
 }
 
-*/
 
 
 void setup(void) {
@@ -251,18 +242,7 @@ void setup(void) {
   // Initialize the interrupt handling by wiringPi:
   wiringPiSetupPhys();
   pinMode(INPUT_NO, OUTPUT);
-  //old way to do it
-  //wiringPiISR(INPUT_NO, INT_EDGE_BOTH, &interrupt_handler);
-
-  // Get an initial state of input:
-  // last_state = digitalRead(INPUT_NO);
-/*
-  char set_output[25], set_interrupt[25];
-  sprintf(set_output, "gpio -1 mode %i input", INPUT_NO);
-  sprintf(set_interrupt, "gpio edge %i both", INPUT_NO);
-  system(set_output);
-  system(set_interrupt);
-*/
+  wiringPiISR(INPUT_NO, INT_EDGE_BOTH, &interrupt_handler);
 }
 
 
@@ -270,18 +250,11 @@ void send_codes(int byte0, int byte1, int byte2, int byte3) {
   // Wait until the interrupt, then check the input state and send codes
 
   while (1) {
-   /* if (*/waitForInterrupt(INPUT_NO, 30000)/* == 1)*/ ; 
-    if (1) {
-      if (digitalRead(INPUT_NO) == 1) {
-        send_bytes(byte0, byte1, byte2, byte3);
-      }
-      else {
-      all_off();
-      break;
-      }
+    if (last_state == 1) {
+      send_bytes(byte0, byte1, byte2, byte3);
     }
     else {
-      printf("Timeout!");
+      all_off();
       break;
     }
   }
