@@ -1,0 +1,2 @@
+# Grant write privileges on all i2c busses to the i2c group
+KERNEL=="i2c-[1-9]*", GROUP="i2c", MODE="0660"

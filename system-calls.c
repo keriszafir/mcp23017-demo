@@ -2,6 +2,9 @@
 
 This program uses a system call to the i2cset program from i2c-tools package.
 It initializes two MCP23017 chips and sends bytes to registers.
+
+This program uses the i2cset utility from the i2c-tools package,
+and must be run as root.
 */
 
 #include <stdlib.h>
