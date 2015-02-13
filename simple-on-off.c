@@ -22,26 +22,8 @@ This program depends on i2c-dev library, so you won't compile it without that.
 #include <sys/ioctl.h>
 #include <linux/i2c-dev.h>
 
+/*  Define constants for MCP23017 I2C bus addresses
 
-static const char *device = "/dev/i2c-1";	// Fliesystem path to access the I2C bus
-
-int main() {
-
-// Initialize 1st MCP23017 with 0x20 address:
-int mcp0;
-mcp0 = open(device, O_RDWR);
-ioctl(mcp0, I2C_SLAVE, 0x20);
-
-// Initialize 2nd MCP23017 with 0x21 address:
-int mcp1;
-mcp1 = open(device, O_RDWR);
-ioctl(mcp1, I2C_SLAVE, 0x21);
-
-/*Writing bytes to registers:
-
-  We use a function wiringPiI2CWriteReg8(device, int reg, int data)
-
-  The first number is an I2C address of a MCP23017 chip.
   This address is set by pulling the pins A0, A1, A2 up (to +3.3V) or down (to GND).
   The major digit is 2, and it's set by manufacturer.
   The minor digit is an octal numbers of the byte from pins A2, A1, A0:
@@ -59,6 +41,75 @@ ioctl(mcp1, I2C_SLAVE, 0x21);
   0x25  1, 0, 1
   0x26  1, 1, 0
   0x27  1, 1, 1
+*/
+
+#define MCP0_ADDR 0x20
+#define MCP1_ADDR 0x21
+
+
+// Define constants for MCP23017 register numbers. They'll be explained later.
+
+#define IODIRA 0x00
+#define IODIRB 0x01
+#define GPIOA 0x12
+#define GPIOB 0x13
+
+// Define a constant for output and "low" status:
+#define OUTPUT 0x00
+#define ALL_OFF 0x00
+
+static const char *device = "/dev/i2c-1";	// Filesystem path to access the I2C bus
+uint8_t buffer[2];                              // Initialize a buffer for two bytes to write to the device
+int mcp0, mcp1;
+
+
+
+void all_off(void) {
+  // This function sets all outputs on both chips to 0 (off, low state).
+
+  // Chip 0
+  buffer[0] = GPIOA;
+  buffer[1] = ALL_OFF;
+  write(mcp0, buffer, 2) ; //GPIOA to all off
+
+  buffer[0] = GPIOB;
+  buffer[1] = ALL_OFF;
+  write(mcp0, buffer, 2) ; //GPIOB to all off
+
+  // Chip 1
+  buffer[0] = GPIOA;
+  buffer[1] = ALL_OFF;
+  write(mcp1, buffer, 2) ; //GPIOA to all off
+
+  buffer[0] = GPIOB;
+  buffer[1] = ALL_OFF;
+  write(mcp1, buffer, 2) ; //GPIOB to all off
+}
+
+
+
+int mcp_init(void) {
+// Chip initialization:
+// The system (and kernel in particular) must set up communication
+// with the MCP23017 chips over the I2C bus. It's done by opening
+// the device file (/dev/i2c-1) and calling the "ioctl" function.
+
+// The chip must also "know" that it's used for providing outputs.
+// All the registers used are specified in the chip's datasheet:
+// http://ww1.microchip.com/downloads/en/DeviceDoc/21952b.pdf
+
+// Initialize 1st MCP23017 with 0x20 address:
+mcp0 = open(device, O_RDWR);
+ioctl(mcp0, I2C_SLAVE, MCP0_ADDR);
+
+// Initialize 2nd MCP23017 with 0x21 address:
+mcp1 = open(device, O_RDWR);
+ioctl(mcp1, I2C_SLAVE, MCP1_ADDR);
+
+
+
+/*Writing bytes to registers:
+
 
   Each MCP23017 has two input/output banks, and we can read or write
   bytes to/from them at once.
@@ -82,112 +133,86 @@ ioctl(mcp1, I2C_SLAVE, 0x21);
   if you want some pins to be outputs and other to be inputs.
 
   */
-  uint8_t buffer[2];
+
 
   // First, we must set the I/O direction to output.
   // Write 0x00 to all IODIRA and IODIRB registers.
 
   // Chip 0
-  buffer[0] = 0x00;
-  buffer[1] = 0x01;
-  write(mcp0, buffer, 2) ;  // set IODIRA to 0x00, all outputs
+  buffer[0] = IODIRA;
+  buffer[1] = OUTPUT;
+  write(mcp0, buffer, 2) ;  // set IODIRA to all outputs
 
-  buffer[0] = 0x01;
-  buffer[1] = 0x01;
-  write(mcp0, buffer, 2) ;  // set IODIRB to 0x00, all outputs
+  buffer[0] = IODIRB;
+  buffer[1] = OUTPUT;
+  write(mcp0, buffer, 2) ;  // set IODIRB to all outputs
 
   // Chip 1
-  buffer[0] = 0x00;
-  buffer[1] = 0x01;
-  write(mcp1, buffer, 2) ;  // set IODIRA to 0x00, all outputs
+  buffer[0] = IODIRA;
+  buffer[1] = OUTPUT;
+  write(mcp1, buffer, 2) ;  // set IODIRA to all outputs
 
-  buffer[0] = 0x01;
-  buffer[1] = 0x01;
-  write(mcp1, buffer, 2) ;  // set IODIRB to 0x00, all outputs
+  buffer[0] = IODIRB;
+  buffer[1] = OUTPUT;
+  write(mcp1, buffer, 2) ;  // set IODIRB to all outputs
+
 
   // Now we should initially set the outputs' state to low
-  // by writing 0x00 byte to GPIOA and GPIOB.
+
   // Do the same whenever you want to turn all outputs off at once.
-  // It should be easier to do this with a "for" loop (DRY principle),
-  // and define a function that can be called from your program.
+  // It should be easier to do this with a "for" loop (DRY principle).
+
+all_off();
+
+}
+
+
+void send_bytes(int byte1, int byte2, int byte3, int byte4) {
+  // This function sends bytes (received as arguments) 
+  // to the chips' GPIOA, GPIOB registers.
 
   // Chip 0
-  buffer[0] = 0x12;
-  buffer[1] = 0x00;
-  write(mcp0, buffer, 2) ; //GPIOA to 0x00, all off
-
-  buffer[0] = 0x13;
-  buffer[1] = 0x00;
-  write(mcp0, buffer, 2) ; //GPIOB to 0x00, all off
-
-  // Chip 1
-  buffer[0] = 0x12;
-  buffer[1] = 0x00;
-  write(mcp1, buffer, 2) ; //GPIOA to 0x00, all off
-
-  buffer[0] = 0x13;
-  buffer[1] = 0x00;
-  write(mcp1, buffer, 2) ; //GPIOB to 0x00, all off
-
-
-  // We're slowly getting to turn the outputs on...
-  // Let's set up some arbitrary bytes to send.
-
-  int byte1 ;
-  int byte2 ;
-  int byte3 ;
-  int byte4 ;
-
-  byte1 = 0xaa ;
-  byte2 = 0x40 ;
-  byte3 = 0x15 ;
-  byte4 = 0xec ;
-
-  // Now, let's write these bytes to the outputs!
-  // Chip 0
-  buffer[0] = 0x12;
+  buffer[0] = GPIOA;
   buffer[1] = byte1;
   write(mcp0, buffer, 2) ; //GPIOA set byte 1
 
-  buffer[0] = 0x13;
+  buffer[0] = GPIOB;
   buffer[1] = byte2;
   write(mcp0, buffer, 2) ; //GPIOB set byte 2
 
   // Chip 1
-  buffer[0] = 0x12;
+  buffer[0] = GPIOA;
   buffer[1] = byte3;
   write(mcp1, buffer, 2) ; //GPIOA set byte 3
 
-  buffer[0] = 0x13;
+  buffer[0] = GPIOB;
   buffer[1] = byte4;
   write(mcp1, buffer, 2) ; //GPIOB set byte 4
+}
 
+
+
+
+int main(void) {
+
+  // Main loop: 
+
+  // Initialize the chips:
+  mcp_init();
+
+  // Send four bytes to the chips:
+
+  // Call a function send_bytes(byte0, byte1, byte2, byte3).
+  // You can send them as hex, decimal, octal or bin values.
+  send_bytes(0x11, 53, 0144, 0b10101010);
 
   // Wait 5s so that you see the outputs turned on:
   sleep(5) ;
 
   // Now turn all the outputs off - write 0x00 to GPIOA, GPIOB
   // on both chips:
-
-  // Chip 0
-  buffer[0] = 0x12;
-  buffer[1] = 0x00;
-  write(mcp0, buffer, 2) ; //GPIOA to 0x00, all off
-
-  buffer[0] = 0x13;
-  buffer[1] = 0x00;
-  write(mcp0, buffer, 2) ; //GPIOB to 0x00, all off
-
-  // Chip 1
-  buffer[0] = 0x12;
-  buffer[1] = 0x00;
-  write(mcp1, buffer, 2) ; //GPIOA to 0x00, all off
-
-  buffer[0] = 0x13;
-  buffer[1] = 0x00;
-  write(mcp1, buffer, 2) ; //GPIOB to 0x00, all off
+  all_off();
 
   // This will be the end of our demonstration program.
-
   return 0 ;
 }
