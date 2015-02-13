@@ -99,7 +99,7 @@ ioctl(mcp1, I2C_SLAVE, 0x21);
   // Chip 1
   buffer[0] = 0x00;
   buffer[1] = 0x01;
-  write(mcp0, buffer, 2) ;  // set IODIRA to 0x00, all outputs
+  write(mcp1, buffer, 2) ;  // set IODIRA to 0x00, all outputs
 
   buffer[0] = 0x01;
   buffer[1] = 0x01;
