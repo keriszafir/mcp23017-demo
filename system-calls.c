@@ -80,7 +80,7 @@ register_address - hex or decimal int for register address, it's convenient to u
 value            - byte we want to write to the register (hex, decimal, bin)
 */
 int bus_id;
-bus_id = 1                // change this to 0 if you use an old RPi mod B rev 1, or early mod A
+bus_id = 1;                // change this to 0 if you use an old RPi mod B rev 1, or early mod A
 char command[50];
 sprintf(command, "i2cset -y %i %i %i %i", bus_id, chip_address, register_address, value);
 system(command);
