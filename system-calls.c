@@ -1,4 +1,7 @@
-/* MCP23017 control program for demonstration purposes
+/* MCP23017 control program for demonstration purposes.
+
+It's a routine that sends some arbitrary bytes to two MCP23017 I/O expanders,
+connected to the Raspberry Pi I2C interface.
 
 This program uses a system call to the i2cset program from i2c-tools package.
 It initializes two MCP23017 chips and sends bytes to registers.
@@ -73,7 +76,7 @@ and this would provide 128 additional input/outputs.
 #define GPIOB 0x13   // hex address for GPIOB register - bank B input/outputs
 
 void write_data(int chip_address, int register_address, int value) {
-/*Wrapper function for "system" call to "i2cset" utility.
+/* Wrapper function for "system" call to "i2cset" utility.
 Arguments:
 chip_address     - MCP23017 I2C bus address (0x20, 0x21)
 register_address - hex or decimal int for register address, it's convenient to use constants as above
@@ -87,15 +90,16 @@ system(command);
 }
 
 void all_off(void) {
-//All off: write 0x00 to all outputs to turn them off
+// All off: write 0x00 to all outputs to turn them off
 write_data(MCP0, GPIOA, 0x00);
 write_data(MCP0, GPIOB, 0x00);
 write_data(MCP1, GPIOA, 0x00);
 write_data(MCP1, GPIOB, 0x00);
 }
 
-void init(void) {
-//Initialization: set all pins as outputs and set them to 0
+void mcp_init(void) {
+// Initialization: set all pins on both GPIO banks 
+// on all chips as outputs, and call all_off() to set them to 0
 write_data(MCP0, IODIRA, 0x00);
 write_data(MCP0, IODIRB, 0x00);
 write_data(MCP1, IODIRA, 0x00);
@@ -104,7 +108,9 @@ all_off();
 }
 
 void send_bytes(int byte0, int byte1, int byte2, int byte3) {
-//A function that send specified bytes to registers, all at once
+     
+// A function that takes 4 bytes and sends them to GPIO registers 
+// on both banks for both chips, all at once
 write_data(MCP0, GPIOA, byte0);
 write_data(MCP0, GPIOB, byte1);
 write_data(MCP1, GPIOA, byte2);
@@ -112,23 +118,18 @@ write_data(MCP1, GPIOB, byte3);
 }
 
 void main(void) {
-//Set some arbitrary bytes that we'll send to outputs
-int byte0;
-byte0 = 0x11;       // hex
-int byte1;
-byte1 = 0177;       // octal
-int byte2;
-byte2 = 51;
-int byte3;
-byte3 = 0b11001100; // binary - it'll work if you compile it with gcc
+     
+// Declare some arbitrary bytes that we'll send to outputs
+int byte0, byte1, byte2, byte3;
 
-//Initialize chips
-init();
+// These bytes can be hex, octal, decimal or binary values:
+byte0 = 0x11;                  // hex
+byte1 = 0177;                  // octal
+byte2 = 51;                    // decimal
+byte3 = 0b11001100;            // binary - it'll work if you compile it with gcc
 
-//Send these bytes!
-send_bytes(byte0, byte1, byte2, byte3);
-//Wait 5 seconds
-sleep(5);
-//Turn all lines off
-all_off();
+mcp_init();                                      // Call mcp_init() to initialize the chips
+send_bytes(byte0, byte1, byte2, byte3);          // Send these bytes!
+sleep(5);                                        // Wait 5 seconds, keep the outputs on
+all_off();                                       // Turn all lines off
 }
