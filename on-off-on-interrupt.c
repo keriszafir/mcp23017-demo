@@ -9,10 +9,18 @@ the Linux security policy is to avoid direct hardware access to regular users.
 You must execute it with "sudo" (for example, "sudo demo").
 
 This program depends on i2c-dev library, so you won't compile it without that.
+It also uses wiringPi for handling interrupts. wiringPi is available at:
+http://wiringpi.com
+
+You MUST compile it with a command:
+
+gcc input_file.c -o output_file -lwiringPi
 */
 
 
 #include <stdio.h>
+#include <sys/time.h>
+#include <wiringPi.h> 
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -43,24 +51,30 @@ This program depends on i2c-dev library, so you won't compile it without that.
   0x27  1, 1, 1
 */
 
+// Define the physical pin number for the input we'll handle the interrupts from:
+# define INPUT_NO 11
+
+// Define I2C addresses for MCP23017 chips:
 #define MCP0_ADDR 0x20
 #define MCP1_ADDR 0x21
 
-
 // Define constants for MCP23017 register numbers. They'll be explained later.
-
 #define IODIRA 0x00
 #define IODIRB 0x01
 #define GPIOA 0x12
 #define GPIOB 0x13
 
 // Define a constant for output and "low" status:
-#define OUTPUT 0x00
+#define OUTPUT_BYTE 0x00
 #define ALL_OFF 0x00
 
+// Declare some global variables:
 static const char *device = "/dev/i2c-1";	// Filesystem path to access the I2C bus
 uint8_t buffer[2];                              // Initialize a buffer for two bytes to write to the device
-int mcp0, mcp1;
+int mcp0, mcp1;                                 // Both MCP23017 chip file descriptors
+static volatile int state;                      // For storing the input's state
+struct timeval last_change;                     // For storing the last state change
+
 
 
 
@@ -140,20 +154,20 @@ ioctl(mcp1, I2C_SLAVE, MCP1_ADDR);
 
   // Chip 0
   buffer[0] = IODIRA;
-  buffer[1] = OUTPUT;
+  buffer[1] = OUTPUT_BYTE;
   write(mcp0, buffer, 2) ;  // set IODIRA to all outputs
 
   buffer[0] = IODIRB;
-  buffer[1] = OUTPUT;
+  buffer[1] = OUTPUT_BYTE;
   write(mcp0, buffer, 2) ;  // set IODIRB to all outputs
 
   // Chip 1
   buffer[0] = IODIRA;
-  buffer[1] = OUTPUT;
+  buffer[1] = OUTPUT_BYTE;
   write(mcp1, buffer, 2) ;  // set IODIRA to all outputs
 
   buffer[0] = IODIRB;
-  buffer[1] = OUTPUT;
+  buffer[1] = OUTPUT_BYTE;
   write(mcp1, buffer, 2) ;  // set IODIRB to all outputs
 
 
@@ -192,27 +206,74 @@ void send_bytes(int byte1, int byte2, int byte3, int byte4) {
 
 
 
+void send_codes(int byte0, int byte1, int byte2, int byte3) {
+/* Here all the magic happens...
+   Upon interrupt, this function checks if the last input state was on or off.
+   If it was off (and is on now), then send the bytes to outputs.
+   If it was on (and is off now), then turn all lines off.
+*/ 
 
-int main(void) {
+  struct timeval now;
+  unsigned long diff;
+ 
+  gettimeofday(&now, NULL);
+ 
+  // Time difference - set 10ms (1/100s)
+  diff = (now.tv_sec * 1000000 + 20000) - (last_change.tv_sec * 1000000 + last_change.tv_usec);
+ 
+  // Filter any changes in intervals shorter than diff (like contact bouncing etc.):
+  if (diff > 10000) {
+ 
+  // Check whether the last state was on or off:
+    if (state) {
+      all_off();
+    }
+    else {
+      send_bytes(byte0, byte1, byte2, byte3);
+    }
+ 
+    // Change the "state" variable value:
+    state = !state;
+  }
 
-  // Main loop: 
+  // Store the time for last state change:
+  last_change = now;
+} 
+
+void setup(void) {
+  //Setup function: initialize all the inputs and outputs first:
 
   // Initialize the chips:
   mcp_init();
 
+  // Initialize the interrupt handling by wiringPi:
+  wiringPiSetupPhys();
+  pinMode(INPUT_NO, OUTPUT);
+  wiringPiISR(INPUT_NO, INT_EDGE_BOTH, &handle);
+
+  // Get an initial state of input:
+  state = digitalRead(INPUT_NO);
+
+  // Bind to interrupt:
+  wiringPiISR(PIN, INT_EDGE_BOTH, &send_codes); 
+}
+  
+
+int main(void) {
+
+  // Main loop: 
+  // Setup:
+  setup()
+
+  // What time is it?
+  gettimeofday(&last_change, NULL);
+
   // Send four bytes to the chips:
-
-  // Call a function send_bytes(byte0, byte1, byte2, byte3).
-  // You can send them as hex, decimal, octal or bin values.
-  send_bytes(0x11, 53, 0144, 0b10101010);
-
-  // Wait 5s so that you see the outputs turned on:
-  sleep(5) ;
-
-  // Now turn all the outputs off - write 0x00 to GPIOA, GPIOB
-  // on both chips:
-  all_off();
-
+  send_codes(0x11, 53, 0144, 0b10101010);
+  send_codes(0x22, 42, 0265, 0b01010101);
+  send_codes(0x11, 53, 0144, 0b10101010);
+  send_codes(0x22, 42, 0265, 0b01010101);
+  
   // This will be the end of our demonstration program.
   return 0 ;
 }
