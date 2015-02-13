@@ -17,14 +17,14 @@ You MUST compile it with a command:
 gcc input_file.c -o output_file -lwiringPi
 */
 
-
+#include <wiringPi.h>
 #include <stdio.h>
 #include <sys/time.h>
-#include <wiringPi.h> 
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
@@ -72,7 +72,7 @@ gcc input_file.c -o output_file -lwiringPi
 static const char *device = "/dev/i2c-1";	// Filesystem path to access the I2C bus
 uint8_t buffer[2];                              // Initialize a buffer for two bytes to write to the device
 int mcp0, mcp1;                                 // Both MCP23017 chip file descriptors
-static volatile int state;                      // For storing the input's state
+static volatile int last_state;                      // For storing the input's state
 struct timeval last_change;                     // For storing the last state change
 
 
@@ -177,7 +177,6 @@ ioctl(mcp1, I2C_SLAVE, MCP1_ADDR);
   // It should be easier to do this with a "for" loop (DRY principle).
 
 all_off();
-
 }
 
 
@@ -204,41 +203,44 @@ void send_bytes(int byte1, int byte2, int byte3, int byte4) {
   write(mcp1, buffer, 2) ; //GPIOB set byte 4
 }
 
-
-
-void send_codes(int byte0, int byte1, int byte2, int byte3) {
+/*
+void interrupt_handler(void) {
 /* Here all the magic happens...
    Upon interrupt, this function checks if the last input state was on or off.
    If it was off (and is on now), then send the bytes to outputs.
    If it was on (and is off now), then turn all lines off.
-*/ 
+
+/*
 
   struct timeval now;
   unsigned long diff;
- 
+
   gettimeofday(&now, NULL);
- 
+
   // Time difference - set 10ms (1/100s)
   diff = (now.tv_sec * 1000000 + 20000) - (last_change.tv_sec * 1000000 + last_change.tv_usec);
- 
+
   // Filter any changes in intervals shorter than diff (like contact bouncing etc.):
   if (diff > 10000) {
- 
+
   // Check whether the last state was on or off:
-    if (state) {
+    if (last_state) {
       all_off();
     }
     else {
-      send_bytes(byte0, byte1, byte2, byte3);
+      break;
     }
- 
+
     // Change the "state" variable value:
-    state = !state;
+    last_state = !last_state;
   }
 
   // Store the time for last state change:
   last_change = now;
-} 
+}
+
+*/
+
 
 void setup(void) {
   //Setup function: initialize all the inputs and outputs first:
@@ -249,31 +251,60 @@ void setup(void) {
   // Initialize the interrupt handling by wiringPi:
   wiringPiSetupPhys();
   pinMode(INPUT_NO, OUTPUT);
-  wiringPiISR(INPUT_NO, INT_EDGE_BOTH, &handle);
+  //old way to do it
+  //wiringPiISR(INPUT_NO, INT_EDGE_BOTH, &interrupt_handler);
 
   // Get an initial state of input:
-  state = digitalRead(INPUT_NO);
-
-  // Bind to interrupt:
-  wiringPiISR(PIN, INT_EDGE_BOTH, &send_codes); 
+  // last_state = digitalRead(INPUT_NO);
+/*
+  char set_output[25], set_interrupt[25];
+  sprintf(set_output, "gpio -1 mode %i input", INPUT_NO);
+  sprintf(set_interrupt, "gpio edge %i both", INPUT_NO);
+  system(set_output);
+  system(set_interrupt);
+*/
 }
-  
+
+
+void send_codes(int byte0, int byte1, int byte2, int byte3) {
+  // Wait until the interrupt, then check the input state and send codes
+
+  while (1) {
+   /* if (*/waitForInterrupt(INPUT_NO, 30000)/* == 1)*/ ; 
+    if (1) {
+      if (digitalRead(INPUT_NO) == 1) {
+        send_bytes(byte0, byte1, byte2, byte3);
+      }
+      else {
+      all_off();
+      break;
+      }
+    }
+    else {
+      printf("Timeout!");
+      break;
+    }
+  }
+}
+
 
 int main(void) {
 
-  // Main loop: 
+  // Main loop:
   // Setup:
-  setup()
+  setup();
 
   // What time is it?
-  gettimeofday(&last_change, NULL);
+  //gettimeofday(&last_change, NULL);
 
-  // Send four bytes to the chips:
+  //Wait for signal then turn on the bytes
   send_codes(0x11, 53, 0144, 0b10101010);
   send_codes(0x22, 42, 0265, 0b01010101);
   send_codes(0x11, 53, 0144, 0b10101010);
   send_codes(0x22, 42, 0265, 0b01010101);
-  
+
+
+
   // This will be the end of our demonstration program.
   return 0 ;
 }
