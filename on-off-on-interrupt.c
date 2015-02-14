@@ -72,8 +72,7 @@ gcc input_file.c -o output_file -lwiringPi
 static const char *device = "/dev/i2c-1";	// Filesystem path to access the I2C bus
 uint8_t buffer[2];                              // Initialize a buffer for two bytes to write to the device
 int mcp0, mcp1;                                 // Both MCP23017 chip file descriptors
-static volatile int last_state;                 // For storing the input's state
-last_state = 0;
+static volatile int interrupt, last_state;      // For storing the input's state
 struct timeval last_change;                     // For storing the last state change
 
 
@@ -182,7 +181,7 @@ all_off();
 
 
 void send_bytes(int byte1, int byte2, int byte3, int byte4) {
-  // This function sends bytes (received as arguments) 
+  // This function sends bytes (received as arguments)
   // to the chips' GPIOA, GPIOB registers.
 
   // Chip 0
@@ -224,7 +223,7 @@ void interrupt_handler(void) {
   // Filter any changes in intervals shorter than diff (like contact bouncing etc.).
   // Change the status:
   if (diff > 10000) {
-    last_state = !last_state;
+    interrupt = 1;
   }
 
   // Store the time for last state change:
@@ -243,20 +242,41 @@ void setup(void) {
   wiringPiSetupPhys();
   pinMode(INPUT_NO, OUTPUT);
   wiringPiISR(INPUT_NO, INT_EDGE_BOTH, &interrupt_handler);
+  interrupt = 0;
+  last_state = digitalRead(INPUT_NO);    // Check the input state
 }
 
 
 void send_codes(int byte0, int byte1, int byte2, int byte3) {
   // Wait until the interrupt, then check the input state and send codes
 
-  while (1) {
-    if (last_state == 1) {
+  // Set the busy condition to 1:
+  int interface_busy;
+  interface_busy = 1;
+
+  // Hold execution for an entire on-off cycle:
+  while (interface_busy == 1) {
+
+    // Wait and do nothing until we catch the interrupt
+    for (;interrupt == 0;) {
+    sleep(0.1);
+    }
+    interrupt = 0           // Reset the interrupt state
+
+    // Check it the input went on or off (wiringPi can't discriminate
+    // between interrupts on rising or falling edge - if we set them
+    // to INT_EDGE_BOTH, the same event will be generated when the input
+    // is turned on or off. We have to set a last_state variable
+    // in software, and check its value each time an interrupt is generated.
+
+    if (last_state == 0) {  // On turning the input on
       send_bytes(byte0, byte1, byte2, byte3);
     }
-    else {
-      all_off();
-      break;
+    else {                    // On turning the input off
+      all_off();              // Turn all outputs off
+      interface_busy = 0;     // Release the interface and end function
     }
+    last_state =! last_state  // Toggle the last state
   }
 }
 
