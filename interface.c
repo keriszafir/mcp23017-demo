@@ -175,7 +175,7 @@ all_off();
 }
 
 
-void send_bytes(int byte1, int byte2, int byte3, int byte4) {
+void set_outputs(int byte1, int byte2, int byte3, int byte4) {
 // This function sends bytes (received as arguments)
 // to the chips' GPIOA, GPIOB registers.
 
@@ -226,7 +226,7 @@ void interrupt_handler(void) {
 }
 
 
-void setup(void) {
+void interface_setup(void) {
 // Setup function: initialize all the inputs and outputs first:
 
 // Initialize the chips:
@@ -236,8 +236,8 @@ void setup(void) {
   wiringPiSetupPhys();
   pinMode(INPUT_NO, OUTPUT);
   wiringPiISR(INPUT_NO, INT_EDGE_BOTH, &interrupt_handler);
-  interrupt = 0;
-  last_state = digitalRead(INPUT_NO);    // Check the input state
+// Initialize the last_change timer
+  gettimeofday(&last_change, NULL);
 }
 
 
@@ -249,7 +249,7 @@ void send_codes(int byte0, int byte1, int byte2, int byte3) {
   we called the function. This will prevent erroneous sending
   of signals when there's no actual on-off cycle on input.
 */
-  interrupt = 0
+  interrupt = 0;
 
 // Set the busy condition to 1:
   int interface_busy;
@@ -257,13 +257,13 @@ void send_codes(int byte0, int byte1, int byte2, int byte3) {
 
 // Hold execution for an entire on-off cycle:
 // check if the interface is still busy - if so, run the loop
-  while (interface_busy == 1) {
+  while (interface_busy) {
 
 //  Wait and do nothing until we catch the interrupt
-    for (;interrupt == 0;) {
+    for (;!interrupt;) {
     sleep(0.1);
     }
-    interrupt = 0           // Reset the interrupt state
+    interrupt = 0;           // Reset the interrupt state
 
 /*
     Check it the input went on or off (wiringPi can't discriminate
@@ -272,33 +272,14 @@ void send_codes(int byte0, int byte1, int byte2, int byte3) {
     is turned on or off. We have to set a last_state variable
     in software, and check its value each time an interrupt is generated.
 */
-    if (last_state == 0) {   // On turning the input on
-      send_bytes(byte0, byte1, byte2, byte3);
+    if (digitalRead(INPUT_NO)) {   // On turning the input on
+      set_outputs(byte0, byte1, byte2, byte3);
     }
     else {                    // On turning the input off
       all_off();              // Turn all outputs off
       interface_busy = 0;     // Release the interface
     }
-    last_state =! last_state  // Toggle the last state
+//    last_state =! last_state;  // Toggle the last state
   }
 }
 
-
-int main(void) {
-// Main loop:
-
-// Do the setup:
-  setup();
-
-// What time is it?
-  gettimeofday(&last_change, NULL);
-
-// Wait for signal then turn on the bytes
-  send_codes(0x11, 53, 0144, 0b10101010);
-  send_codes(0x22, 42, 0265, 0b01010101);
-  send_codes(0x11, 53, 0144, 0b10101010);
-  send_codes(0x22, 42, 0265, 0b01010101);
-
-// This will be the end of our demonstration program.
-  return 0 ;
-}
