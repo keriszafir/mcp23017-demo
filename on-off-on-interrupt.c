@@ -1,20 +1,21 @@
-/* A demonstration routine for controlling MCP23017 chip outputs under C.
+/*
+  A demonstration routine for controlling MCP23017 chip outputs under C.
 
-This routine sets up two chips, then turns the outputs by writing bytes.
-After 5 seconds, it turns the outputs off.
+  This routine sets up two chips, then turns the outputs by writing bytes.
+  After 5 seconds, it turns the outputs off.
 
-You MUST run this program with root privileges - otherwise it won't work.
-That's because we're writing directly to the hardware;
-the Linux security policy is to avoid direct hardware access to regular users.
-You must execute it with "sudo" (for example, "sudo demo").
+  You MUST run this program with root privileges - otherwise it won't work.
+  That's because we're writing directly to the hardware;
+  the Linux security policy is to avoid direct hardware access to regular users.
+  You must execute it with "sudo" (for example, "sudo demo").
 
-This program depends on i2c-dev library, so you won't compile it without that.
-It also uses wiringPi for handling interrupts. wiringPi is available at:
-http://wiringpi.com
+  This program depends on i2c-dev library, so you won't compile it without that.
+  It also uses wiringPi for handling interrupts. wiringPi is available at:
+  http://wiringpi.com
 
-You MUST compile it with a command:
+  You MUST compile it with a command:
 
-gcc input_file.c -o output_file -lwiringPi
+  gcc input_file.c -o output_file -lwiringPi
 */
 
 #include <wiringPi.h>
@@ -30,7 +31,8 @@ gcc input_file.c -o output_file -lwiringPi
 #include <sys/ioctl.h>
 #include <linux/i2c-dev.h>
 
-/*  Define constants for MCP23017 I2C bus addresses
+/*
+  Define constants for MCP23017 I2C bus addresses
 
   This address is set by pulling the pins A0, A1, A2 up (to +3.3V) or down (to GND).
   The major digit is 2, and it's set by manufacturer.
@@ -69,8 +71,8 @@ gcc input_file.c -o output_file -lwiringPi
 #define ALL_OFF 0x00
 
 // Declare some global variables:
-static const char *device = "/dev/i2c-1";	// Filesystem path to access the I2C bus
-uint8_t buffer[2];                              // Initialize a buffer for two bytes to write to the device
+static const char *device = "/dev/i2c-1";       // Filesystem path to access the I2C bus
+uint8_t buffer[2];                              // Buffer for two bytes to write to the device
 int mcp0, mcp1;                                 // Both MCP23017 chip file descriptors
 static volatile int interrupt, last_state;      // For storing the input's state
 struct timeval last_change;                     // For storing the last state change
@@ -79,9 +81,9 @@ struct timeval last_change;                     // For storing the last state ch
 
 
 void all_off(void) {
-  // This function sets all outputs on both chips to 0 (off, low state).
+// This function sets all outputs on both chips to 0 (off, low state).
 
-  // Chip 0
+// Chip 0
   buffer[0] = GPIOA;
   buffer[1] = ALL_OFF;
   write(mcp0, buffer, 2) ; //GPIOA to all off
@@ -90,7 +92,7 @@ void all_off(void) {
   buffer[1] = ALL_OFF;
   write(mcp0, buffer, 2) ; //GPIOB to all off
 
-  // Chip 1
+// Chip 1
   buffer[0] = GPIOA;
   buffer[1] = ALL_OFF;
   write(mcp1, buffer, 2) ; //GPIOA to all off
@@ -103,14 +105,16 @@ void all_off(void) {
 
 
 int mcp_init(void) {
-// Chip initialization:
-// The system (and kernel in particular) must set up communication
-// with the MCP23017 chips over the I2C bus. It's done by opening
-// the device file (/dev/i2c-1) and calling the "ioctl" function.
+/*
+  Chip initialization:
+  The system (and kernel in particular) must set up communication
+  with the MCP23017 chips over the I2C bus. It's done by opening
+  the device file (/dev/i2c-1) and calling the "ioctl" function.
 
-// The chip must also "know" that it's used for providing outputs.
-// All the registers used are specified in the chip's datasheet:
-// http://ww1.microchip.com/downloads/en/DeviceDoc/21952b.pdf
+  The chip must also "know" that it's used for providing outputs.
+  All the registers used are specified in the chip's datasheet:
+  http://ww1.microchip.com/downloads/en/DeviceDoc/21952b.pdf
+*/
 
 // Initialize 1st MCP23017 with 0x20 address:
 mcp0 = open(device, O_RDWR);
@@ -121,9 +125,8 @@ mcp1 = open(device, O_RDWR);
 ioctl(mcp1, I2C_SLAVE, MCP1_ADDR);
 
 
-
-/*Writing bytes to registers:
-
+/*
+  Writing bytes to registers:
 
   Each MCP23017 has two input/output banks, and we can read or write
   bytes to/from them at once.
@@ -131,13 +134,12 @@ ioctl(mcp1, I2C_SLAVE, MCP1_ADDR);
   Bank A (pins 21...28, named GPA0...GPA7)
   Bank B (pins 1...8, named GPB0...GPB7)
 
-
   The MCP23017 has many registers we can write bytes from, but the ones
-  that interest us are (with their hex values):
+  that interest us are (with their hex addresses):
 
-  IODIRA - 0x00  - for setting the direction (input or output) for the bank; 0 - output, 1 - input
+  IODIRA - 0x00  - for setting the direction (0 - in, 1 - out) for the bank
   IODIRB - 0x01  - as above for bank B
-  GPIOA  - 0x12  - for writing the data to outputs or reading the inputs of bank A
+  GPIOA  - 0x12  - for writing to outputs or reading the inputs of bank A
   GPIOB  - 0x13  - as above for bank B
 
   First, we need to set the IODIRA and IODIRB registers which control
@@ -146,13 +148,10 @@ ioctl(mcp1, I2C_SLAVE, MCP1_ADDR);
   Write 0x00 for all outputs, 0xff for all inputs, or any other hex number
   if you want some pins to be outputs and other to be inputs.
 
-  */
-
-
-  // First, we must set the I/O direction to output.
-  // Write 0x00 to all IODIRA and IODIRB registers.
-
-  // Chip 0
+  First, we must set the I/O direction to output.
+  Write 0x00 to all IODIRA and IODIRB registers.
+*/
+// Chip 0
   buffer[0] = IODIRA;
   buffer[1] = OUTPUT_BYTE;
   write(mcp0, buffer, 2) ;  // set IODIRA to all outputs
@@ -161,7 +160,7 @@ ioctl(mcp1, I2C_SLAVE, MCP1_ADDR);
   buffer[1] = OUTPUT_BYTE;
   write(mcp0, buffer, 2) ;  // set IODIRB to all outputs
 
-  // Chip 1
+// Chip 1
   buffer[0] = IODIRA;
   buffer[1] = OUTPUT_BYTE;
   write(mcp1, buffer, 2) ;  // set IODIRA to all outputs
@@ -171,20 +170,16 @@ ioctl(mcp1, I2C_SLAVE, MCP1_ADDR);
   write(mcp1, buffer, 2) ;  // set IODIRB to all outputs
 
 
-  // Now we should initially set the outputs' state to low
-
-  // Do the same whenever you want to turn all outputs off at once.
-  // It should be easier to do this with a "for" loop (DRY principle).
-
+// Now we should initially set the outputs' state to low.
 all_off();
 }
 
 
 void send_bytes(int byte1, int byte2, int byte3, int byte4) {
-  // This function sends bytes (received as arguments)
-  // to the chips' GPIOA, GPIOB registers.
+// This function sends bytes (received as arguments)
+// to the chips' GPIOA, GPIOB registers.
 
-  // Chip 0
+// Chip 0
   buffer[0] = GPIOA;
   buffer[1] = byte1;
   write(mcp0, buffer, 2) ; //GPIOA set byte 1
@@ -193,7 +188,7 @@ void send_bytes(int byte1, int byte2, int byte3, int byte4) {
   buffer[1] = byte2;
   write(mcp0, buffer, 2) ; //GPIOB set byte 2
 
-  // Chip 1
+// Chip 1
   buffer[0] = GPIOA;
   buffer[1] = byte3;
   write(mcp1, buffer, 2) ; //GPIOA set byte 3
@@ -205,40 +200,39 @@ void send_bytes(int byte1, int byte2, int byte3, int byte4) {
 
 
 void interrupt_handler(void) {
-/* Here all the magic happens...
-   Upon interrupt, this function checks if the last input state was on or off.
-   If it was off (and is on now), then send the bytes to outputs.
-   If it was on (and is off now), then turn all lines off.
-
+/*
+  Here all the magic happens...
+  Upon interrupt, this function sets the "interrupt" variable to 1.
+  This variable is polled in the send_codes function, which catches
+  the interrupt, resets the variable to 0 and checks the input status.
 */
-
   struct timeval now;
   unsigned long diff;
 
   gettimeofday(&now, NULL);
 
-  // Time difference - set 10ms (1/100s)
+// Time difference - set 10ms (1/100s)
   diff = (now.tv_sec * 1000000 + 20000) - (last_change.tv_sec * 1000000 + last_change.tv_usec);
 
-  // Filter any changes in intervals shorter than diff (like contact bouncing etc.).
-  // Change the status:
+// Filter any changes in intervals shorter than diff
+// (like contact bouncing etc.).
+// Change the status:
   if (diff > 10000) {
     interrupt = 1;
   }
 
-  // Store the time for last state change:
+// Store the time for last state change:
   last_change = now;
 }
 
 
-
 void setup(void) {
-  //Setup function: initialize all the inputs and outputs first:
+// Setup function: initialize all the inputs and outputs first:
 
-  // Initialize the chips:
+// Initialize the chips:
   mcp_init();
 
-  // Initialize the interrupt handling by wiringPi:
+// Initialize the interrupt handling by wiringPi:
   wiringPiSetupPhys();
   pinMode(INPUT_NO, OUTPUT);
   wiringPiISR(INPUT_NO, INT_EDGE_BOTH, &interrupt_handler);
@@ -248,33 +242,42 @@ void setup(void) {
 
 
 void send_codes(int byte0, int byte1, int byte2, int byte3) {
-  // Wait until the interrupt, then check the input state and send codes
+/*
+  Wait until the interrupt, then check the input state and send codes.
 
-  // Set the busy condition to 1:
+  Reset interrupt status just in case there was an interrupt before
+  we called the function. This will prevent erroneous sending
+  of signals when there's no actual on-off cycle on input.
+*/
+  interrupt = 0
+
+// Set the busy condition to 1:
   int interface_busy;
   interface_busy = 1;
 
-  // Hold execution for an entire on-off cycle:
+// Hold execution for an entire on-off cycle:
+// check if the interface is still busy - if so, run the loop
   while (interface_busy == 1) {
 
-    // Wait and do nothing until we catch the interrupt
+//  Wait and do nothing until we catch the interrupt
     for (;interrupt == 0;) {
     sleep(0.1);
     }
     interrupt = 0           // Reset the interrupt state
 
-    // Check it the input went on or off (wiringPi can't discriminate
-    // between interrupts on rising or falling edge - if we set them
-    // to INT_EDGE_BOTH, the same event will be generated when the input
-    // is turned on or off. We have to set a last_state variable
-    // in software, and check its value each time an interrupt is generated.
-
-    if (last_state == 0) {  // On turning the input on
+/*
+    Check it the input went on or off (wiringPi can't discriminate
+    between interrupts on rising or falling edge - if we set them
+    to INT_EDGE_BOTH, the same event will be generated when the input
+    is turned on or off. We have to set a last_state variable
+    in software, and check its value each time an interrupt is generated.
+*/
+    if (last_state == 0) {   // On turning the input on
       send_bytes(byte0, byte1, byte2, byte3);
     }
     else {                    // On turning the input off
       all_off();              // Turn all outputs off
-      interface_busy = 0;     // Release the interface and end function
+      interface_busy = 0;     // Release the interface
     }
     last_state =! last_state  // Toggle the last state
   }
@@ -282,22 +285,20 @@ void send_codes(int byte0, int byte1, int byte2, int byte3) {
 
 
 int main(void) {
+// Main loop:
 
-  // Main loop:
-  // Setup:
+// Do the setup:
   setup();
 
-  // What time is it?
-  //gettimeofday(&last_change, NULL);
+// What time is it?
+  gettimeofday(&last_change, NULL);
 
-  //Wait for signal then turn on the bytes
+// Wait for signal then turn on the bytes
   send_codes(0x11, 53, 0144, 0b10101010);
   send_codes(0x22, 42, 0265, 0b01010101);
   send_codes(0x11, 53, 0144, 0b10101010);
   send_codes(0x22, 42, 0265, 0b01010101);
 
-
-
-  // This will be the end of our demonstration program.
+// This will be the end of our demonstration program.
   return 0 ;
 }
